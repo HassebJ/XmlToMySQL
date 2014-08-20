@@ -25,14 +25,6 @@ router.get('/parsexml', function(req, res) {
 	fs.readFile(dir + '/data/Contacts.xml','utf8', function(err, data) {
 		var xml = data.replace("\ufeff", "");
 
-		
-
-		
-
-		session.transaction(function(tx) {
-			
-		
-
 			xmlreader.read(xml, function (err, result) {
 				if(err) return console.log(err);
 
@@ -42,7 +34,6 @@ router.get('/parsexml', function(req, res) {
 					var contactToSave = new Contact(session);
 					var postalAddress = new PostalAddress(session);
 					var physicalAddress = new PhysicalAddress(session);
-					console.log(contact);
 					
 					if(contact.attributes().Type === 'Individual'){
 						if(contact.ResidentOfAustralia.hasOwnProperty('text')){
@@ -154,9 +145,13 @@ router.get('/parsexml', function(req, res) {
 					}
 					// contactToSave.PhysicalAddress.add(physicalAddress);
 					// contactToSave.PostalAddress.add(postalAddress)
-					session.add(contactToSave);
-					session.flush(tx, function() {
-					     
+					session.transaction(function(tx) {
+
+						session.add(contactToSave);
+						session.flush(tx, function() {
+						     
+						});
+
 					});
 					
 				});
@@ -164,7 +159,7 @@ router.get('/parsexml', function(req, res) {
 			    console.log('Done');
 			});
 
-		});
+		// });
 		res.end("Done"); 
 	});
 });

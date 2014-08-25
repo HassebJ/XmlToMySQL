@@ -2,14 +2,16 @@ var express = require('express');
 var router = express.Router();
 var config = require('../config');
 var persistence = require('persistencejs');
+var extfs = require('extfs');
 var persistenceStore = persistence.StoreConfig.init(persistence, { adaptor: 'mysql' });
+var pathToClients = '/data/clients';
+var rimraf = require('rimraf');
 
 
 
-var Contact = require('../models/contact');
-// var PhysicalAddress = require('../models/physicaladdress');
-// var PostalAddress = require('../models/postaladdress');
+var User = require('../models/user');
 var fs = require('fs'),
+	async = require('async'),
     xmlreader = require('xmlreader');
   var path = require('path'),
 	dir = path.normalize(__dirname + '/..');
@@ -22,134 +24,148 @@ var data ='';
 
 
 router.get('/parsexml', function(req, res) {
+	var xml = data.replace("\ufeff", "");
 	
 	persistenceStore.config(persistence, config.host, 3306, config.database, config.user, config.password);
 	var session = persistenceStore.getSession();
 	session.schemaSync();
-  
-  		var xml = data.replace("\ufeff", "");
-
+	
 			xmlreader.read(xml, function (err, result) {
 				if(err) return console.log(err);
 
-				var contacts = result.Contacts;
+				var users = result.Contacts;
 
-				contacts.Contact.each(function (i, contact){
-					var contactToSave = new Contact(session);
+				users.Contact.each(function (i, user){
+					var userToSave = new User(session);
+					if(typeof(user.attributes().Id) !== "undefined"){
+							userToSave._Id = user.attributes().Id;
+					}
+					if(typeof(user.attributes().Code) !== "undefined"){
+						userToSave.Code = user.attributes().Code;
+					}
+					if(typeof(user.attributes().Type) !== "undefined"){
+						userToSave.Type = user.attributes().Type;
+					}
+
 					
-					if(contact.attributes().Type === 'Individual'){
-						if(contact.ResidentOfAustralia.hasOwnProperty('text')){
-						contactToSave.ResidentOfAustralia = contact.ResidentOfAustralia.text() ;
+					if(user.attributes().Type === 'Individual'){
+						if(user.ResidentOfAustralia.hasOwnProperty('text')){
+						userToSave.ResidentOfAustralia = user.ResidentOfAustralia.text() ;
 						}
-						if(contact.Title.hasOwnProperty('text')){
-							contactToSave.Title = contact.Title.text();
+						if(user.Title.hasOwnProperty('text')){
+							userToSave.Title = user.Title.text();
 						}
-						if(contact.Surname.hasOwnProperty('text')){
-							contactToSave.Surname = contact.Surname.text();
+						if(user.Surname.hasOwnProperty('text')){
+							userToSave.Surname = user.Surname.text();
 						}
-						if(contact.GivenNames.hasOwnProperty('text')){
-							contactToSave.GivenNames = contact.GivenNames.text();
+						if(user.GivenNames.hasOwnProperty('text')){
+							userToSave.GivenNames = user.GivenNames.text();
 						}
-						if(contact.DateOfBirth.hasOwnProperty('text')){
-						contactToSave.DateOfBirth = contact.DateOfBirth.text();
+						if(user.DateOfBirth.hasOwnProperty('text')){
+						userToSave.DateOfBirth = user.DateOfBirth.text();
 						}
-						if(contact.DateOfDeath.hasOwnProperty('text')){
-							contactToSave.DateOfDeath = contact.DateOfDeath.text();
+						if(user.DateOfDeath.hasOwnProperty('text')){
+							userToSave.DateOfDeath = user.DateOfDeath.text();
 						}
 
 					}
-					else if (contact.attributes().Type === 'Company' || contact.attributes().Type === 'Partnership'){
-						if(contact.Name.hasOwnProperty('text')){
-							contactToSave.Name = contact.Name.text();
+					else if (user.attributes().Type === 'Company' || user.attributes().Type === 'Partnership' || user.attributes().Type === 'SMSF' || user.attributes().Type === 'Trust'){
+						if(user.Name.hasOwnProperty('text')){
+							userToSave.Name = user.Name.text();
 						}
-						if(contact.attributes().Type === 'Company'){
-							if(contact.Abn.hasOwnProperty('text')){
-								contactToSave.Abn = contact.Abn.text();
+						if(user.attributes().Type === 'Company' || user.attributes().Type === 'SMSF'){
+							if(user.Abn.hasOwnProperty('text')){
+								userToSave.Abn = user.Abn.text();
+							}
+							if(user.attributes().Type === 'SMSF'){
+								if(user.Sfn.hasOwnProperty('text')){
+									userToSave.Sfn = user.Sfn.text();
+								}
+
 							}
 
 						}
 
 					}
 					
-					if(contact.PostalAddress.Line1.hasOwnProperty('text')){
-						contactToSave.PostalAddress_Line1 = contact.PostalAddress.Line1.text();
+					if(user.PostalAddress.Line1.hasOwnProperty('text')){
+						userToSave.PostalAddress_Line1 = user.PostalAddress.Line1.text();
 					}
-					if(contact.PostalAddress.Line2.hasOwnProperty('text')){
-						contactToSave.PostalAddress_Line2 = contact.PostalAddress.Line2.text();
+					if(user.PostalAddress.Line2.hasOwnProperty('text')){
+						userToSave.PostalAddress_Line2 = user.PostalAddress.Line2.text();
 					}
-					if(contact.PostalAddress.Line3.hasOwnProperty('text')){
-						contactToSave.PostalAddress_Line3 = contact.PostalAddress.Line3.text();
+					if(user.PostalAddress.Line3.hasOwnProperty('text')){
+						userToSave.PostalAddress_Line3 = user.PostalAddress.Line3.text();
 					}
-					if(contact.PostalAddress.City.hasOwnProperty('text')){
-						contactToSave.PostalAddress_City = contact.PostalAddress.City.text();
+					if(user.PostalAddress.City.hasOwnProperty('text')){
+						userToSave.PostalAddress_City = user.PostalAddress.City.text();
 					}
-					if(contact.PostalAddress.State.hasOwnProperty('text')){
-						contactToSave.PostalAddress_State = contact.PostalAddress.State.text();
+					if(user.PostalAddress.State.hasOwnProperty('text')){
+						userToSave.PostalAddress_State = user.PostalAddress.State.text();
 					}
-					if(contact.PostalAddress.Postcode.hasOwnProperty('text')){
-						contactToSave.PostalAddress_Postcode = contact.PostalAddress.Postcode.text();
+					if(user.PostalAddress.Postcode.hasOwnProperty('text')){
+						userToSave.PostalAddress_Postcode = user.PostalAddress.Postcode.text();
 					}
-					if(contact.PostalAddress.Country.hasOwnProperty('text')){
-						contactToSave.PostalAddress_Country = contact.PostalAddress.Country.text();
+					if(user.PostalAddress.Country.hasOwnProperty('text')){
+						userToSave.PostalAddress_Country = user.PostalAddress.Country.text();
 					}
-					if(contact.attributes().Type === 'Company' || contact.attributes().Type === 'Individual'){
+					if(user.attributes().Type === 'Company' || user.attributes().Type === 'Individual'){
 
-						if(contact.PhysicalAddress.Line1.hasOwnProperty('text')){
-							contactToSave.PhysicalAddress_Line1 = contact.PhysicalAddress.Line1.text();
+						if(user.PhysicalAddress.Line1.hasOwnProperty('text')){
+							userToSave.PhysicalAddress_Line1 = user.PhysicalAddress.Line1.text();
 						}
-						if(contact.PhysicalAddress.Line2.hasOwnProperty('text')){
-							contactToSave.PhysicalAddress_Line2 = contact.PhysicalAddress.Line2.text();
+						if(user.PhysicalAddress.Line2.hasOwnProperty('text')){
+							userToSave.PhysicalAddress_Line2 = user.PhysicalAddress.Line2.text();
 						}
-						if(contact.PhysicalAddress.Line3.hasOwnProperty('text')){
-							contactToSave.PhysicalAddress_Line3 = contact.PhysicalAddress.Line3.text();
+						if(user.PhysicalAddress.Line3.hasOwnProperty('text')){
+							userToSave.PhysicalAddress_Line3 = user.PhysicalAddress.Line3.text();
 						}
-						if(contact.PhysicalAddress.City.hasOwnProperty('text')){
-							contactToSave.PhysicalAddress_City = contact.PhysicalAddress.City.text();
+						if(user.PhysicalAddress.City.hasOwnProperty('text')){
+							userToSave.PhysicalAddress_City = user.PhysicalAddress.City.text();
 						}
-						if(contact.PhysicalAddress.State.hasOwnProperty('text')){
-							contactToSave.PhysicalAddress_State = contact.PhysicalAddress.State.text();
+						if(user.PhysicalAddress.State.hasOwnProperty('text')){
+							userToSave.PhysicalAddress_State = user.PhysicalAddress.State.text();
 						}
-						if(contact.PhysicalAddress.Postcode.hasOwnProperty('text')){
-							contactToSave.PhysicalAddress_Postcode = contact.PhysicalAddress.Postcode.text();
+						if(user.PhysicalAddress.Postcode.hasOwnProperty('text')){
+							userToSave.PhysicalAddress_Postcode = user.PhysicalAddress.Postcode.text();
 						}
-						if(contact.PhysicalAddress.Country.hasOwnProperty('text')){
-							contactToSave.PhysicalAddress_Country = contact.PhysicalAddress.Country.text();
+						if(user.PhysicalAddress.Country.hasOwnProperty('text')){
+							userToSave.PhysicalAddress_Country = user.PhysicalAddress.Country.text();
 						}
 
 					}
 					
-					if(contact.Tfn.hasOwnProperty('text')){
-						contactToSave.Tfn = contact.Tfn.text();
+					if(user.Tfn.hasOwnProperty('text')){
+						userToSave.Tfn = user.Tfn.text();
 					}
-					if(contact.DaytimePhone.hasOwnProperty('text')){
-						contactToSave.DaytimePhone = contact.DaytimePhone.text();
+					if(user.DaytimePhone.hasOwnProperty('text')){
+						userToSave.DaytimePhone = user.DaytimePhone.text();
 					}
-					if(contact.HomePhone.hasOwnProperty('text')){
-						contactToSave.HomePhone = contact.HomePhone.text();
+					if(user.HomePhone.hasOwnProperty('text')){
+						userToSave.HomePhone = user.HomePhone.text();
 					}
-					if(contact.MobilePhone.hasOwnProperty('text')){
-						contactToSave.MobilePhone = contact.MobilePhone.text();
+					if(user.MobilePhone.hasOwnProperty('text')){
+						userToSave.MobilePhone = user.MobilePhone.text();
 					}
-					if(contact.Fax.hasOwnProperty('text')){
-						contactToSave.Fax = contact.Fax.text();
+					if(user.Fax.hasOwnProperty('text')){
+						userToSave.Fax = user.Fax.text();
 					}
-					if(contact.Email.hasOwnProperty('text')){
-						contactToSave.Email = contact.Email.text();
+					if(user.Email.hasOwnProperty('text')){
+						userToSave.Email = user.Email.text();
 					}
-					if(contact.BSB.hasOwnProperty('text')){
-						contactToSave.BSB = contact.BSB.text();
+					if(user.BSB.hasOwnProperty('text')){
+						userToSave.BSB = user.BSB.text();
 					}
-					if(contact.AccountNumber.hasOwnProperty('text')){
-						contactToSave.AccountNumber = contact.AccountNumber.text();
+					if(user.AccountNumber.hasOwnProperty('text')){
+						userToSave.AccountNumber = user.AccountNumber.text();
 					}
-					if(contact.AccountName.hasOwnProperty('text')){
-						contactToSave.AccountName = contact.AccountName.text();
+					if(user.AccountName.hasOwnProperty('text')){
+						userToSave.AccountName = user.AccountName.text();
 					}
-					// contactToSave.PhysicalAddress.add(physicalAddress);
-					// contactToSave.PostalAddress.add(postalAddress)
+
 					session.transaction(function(tx) {
 
-						session.add(contactToSave);
+						session.add(userToSave);
 						session.flush(tx, function() {
 						     
 						});
@@ -164,5 +180,219 @@ router.get('/parsexml', function(req, res) {
 		res.end("Done"); 
 	// });
 });
+
+router.get('/rename', function(req, res){
+	
+	var xml = data.replace("\ufeff", "");
+
+	xmlreader.read(xml, function (err, result) {
+		if(err) return console.log(err);
+		var users = result.Contacts;
+
+		fs.readdir(dir + pathToClients, function (err, drct){
+			if(!err){
+
+
+				drct.forEach(function(folders){
+
+					fs.readdir(dir + pathToClients +'/'+folders, function (err, d){
+
+						if(!err){
+							
+							d.some(function(folder){
+								var fol = folder.substr(0,8);
+								users.Contact.each(function (i, user){
+									// console.log(user.attributes().Code);
+									if(user.attributes().Code == fol){
+										var source = dir + pathToClients +'/'+folders+'/'+ folder;
+										
+										var sourceDirectory = '';
+										if(folder.substr(9,1).toLowerCase() == '' || folder.substr(9,1).toLowerCase() == ''){
+											sourceDirectory = dir + pathToClients +'/'+fol.substr(0,1).toLowerCase();
+
+										}
+										else{
+											sourceDirectory = dir + pathToClients +'/'+folder.substr(9,1).toLowerCase();
+
+										}
+
+										var destination = sourceDirectory +'/'+ folder.substr(9) + ' (' + fol + ')';
+										
+
+										if(!fs.existsSync(sourceDirectory)){
+											fs.mkdirSync(sourceDirectory);
+										}
+										fs.rename( source, destination , function(err) {
+										    if ( err ) console.log('ERROR: ' + err);
+										    else{
+										    	console.log('/'+folders+'/'+ folder +' renamed to: ' + destination.substr(sourceDirectory.length-2));
+
+										    }
+										});
+										// console.log("#######",fol);
+
+
+									}
+
+								});
+								// return check;
+								
+							});
+
+						}
+						
+
+					});
+
+
+
+				});
+
+			}
+			
+
+		});
+	});
+
+});
+
+router.get('/delempty', function(req, res){
+	fs.readdir(dir + pathToClients, function (err, drct){
+			if(!err){
+				drct.forEach(function(folders){
+
+					fs.readdir(dir + pathToClients +'/'+folders, function (err, d){
+
+						if(!err){
+							
+							d.some(function(folder){
+								fs.readdir(dir + pathToClients +'/'+folders + '/' + folder, function (err, c){
+
+									if(!err){
+										
+										c.some(function(fol){
+											var delPath = dir + pathToClients +'/'+folders + '/' + folder + '/' + fol;
+											fs.lstat(delPath, function(err, stats) {
+											    
+											    if(stats.size === 0){
+											    	rimraf(delPath, function(err){
+											    		if(err) console.log(err);
+											    		else console.log(delPath + " : DELETED");
+
+											    	});
+											    	
+
+
+											    }
+											    
+
+											      
+											});
+											
+
+										});
+									}
+								
+
+								});
+
+										
+									
+										
+							});
+
+						}
+						
+
+					});
+
+
+
+				});
+
+			}
+			
+
+		});
+
+
+});
+
+router.get('/createfolder', function(req, res){
+	
+	var xml = data.replace("\ufeff", "");
+
+	xmlreader.read(xml, function (err, result) {
+		if(err) return console.log(err);
+		var users = result.Contacts;
+
+		users.Contact.each(function (i, user){
+			var name = '';
+
+			if(user.attributes().Type === 'Individual'){
+				if(user.Surname.hasOwnProperty('text')){
+							name = user.Surname.text();
+				}
+
+			}
+			else{
+				if(user.Name.hasOwnProperty('text')){
+							name = user.Name.text();
+				}
+
+			}
+			var check = false;
+			if(name === '' || name === ' '){
+				name = user.attributes().Code;
+				check = true;
+			}
+
+			var folders = '';
+			if (name.substr(0,1).toLowerCase() ===' '){
+				folders = name.substr(1,1).toLowerCase();
+			}
+			else{
+				folders = name.substr(0,1).toLowerCase();
+			}
+
+			if(name.indexOf('/') !== -1 || name.indexOf('\\') !== -1 ){
+			  name = name.replace('\\','-');
+			  name = name.replace('/','-');
+			  console.log(name);
+
+			}
+
+			var source = dir + pathToClients +'/'+folders;
+
+			if(!fs.existsSync(source)){
+				fs.mkdirSync(source);
+				console.log('CREATED: ' + source);
+			}
+
+			var sourceDirectory = '';
+
+			if (check == true){
+				sourceDirectory = dir + pathToClients +'/'+folders + '/' +'(' + user.attributes().Code + ')';
+
+			}
+			else{
+				sourceDirectory = dir + pathToClients +'/'+folders + '/' + name + ' (' + user.attributes().Code + ')';
+			}
+			
+
+			if(!fs.existsSync(sourceDirectory)){
+				fs.mkdirSync(sourceDirectory);
+				console.log('CREATED: ' + sourceDirectory);
+			}
+
+
+		});
+
+		
+	});
+
+});
+
+
 
 module.exports = router;

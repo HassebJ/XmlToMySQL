@@ -17,6 +17,9 @@
     "xmlreader": "*",
     "xmldom": "*",
     "persistencejs": "*",
-    "mysql": "*"
+    "mysql": "*",
+    "extfs": "*",
+    "async": "*",
+    "rimraf":"*"
   }
 }

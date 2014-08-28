@@ -6,6 +6,36 @@ var extfs = require('extfs');
 var persistenceStore = persistence.StoreConfig.init(persistence, { adaptor: 'mysql' });
 var pathToClients = '/data/clients';
 var rimraf = require('rimraf');
+var	response = '';
+
+var mysql      = require('mysql');
+var connection = mysql.createConnection({
+  host     : config.host,
+  user     : config.user,
+  password : config.password
+});
+
+connection.connect(function(err) {
+  if (err) {
+  	response = response + 'Error connecting to MySQL service: ' + err.stack + '\r\n';
+    console.error('Error connecting to MySQL service: ' + err.stack);
+    return;
+  }
+});
+
+connection.query('CREATE DATABASE ' + config.database, function(err, rows) {
+  if(err){
+  	if(err.errno == 1007){
+  		response = response + 'Default db already exists \r\n';
+  	}
+  }else{
+       response = response + 'Default database created \r\n';
+  }
+  
+});
+
+connection.end();
+
 
 
 
@@ -18,20 +48,26 @@ var fs = require('fs'),
 var data ='';
     fs.readFile(dir + '/data/Contacts.xml','utf8', function(err, d) {
     	data = d;
-    	console.log('XML file read successfully');
+    	response = response + 'All records from XML file read successfully \r\n';
+    	console.log(response);
     });
     
 
 
 router.get('/parsexml', function(req, res) {
 	var xml = data.replace("\ufeff", "");
+	res.write(response);
 	
 	persistenceStore.config(persistence, config.host, 3306, config.database, config.user, config.password);
 	var session = persistenceStore.getSession();
 	session.schemaSync();
 	
 			xmlreader.read(xml, function (err, result) {
-				if(err) return console.log(err);
+				if(err) {
+					console.log(err); 
+					return res.end(err);
+
+				}
 
 				var users = result.Contacts;
 
@@ -164,6 +200,14 @@ router.get('/parsexml', function(req, res) {
 					}
 
 					session.transaction(function(tx) {
+						if(req.query.log){
+							res.write('User: ' + JSON.stringify(userToSave) + ' added to DB \r\n');
+						}
+						else{
+							res.write('User: ' + userToSave.Code + ' added to DB \r\n');
+						}
+						
+
 
 						session.add(userToSave);
 						session.flush(tx, function() {
@@ -178,7 +222,6 @@ router.get('/parsexml', function(req, res) {
 			});
 
 		res.end("Done"); 
-	// });
 });
 
 router.get('/rename', function(req, res){
@@ -225,16 +268,25 @@ router.get('/rename', function(req, res){
 										fs.rename( source, destination , function(err) {
 										    if ( err ) console.log('ERROR: ' + err);
 										    else{
-										    	console.log('/'+folders+'/'+ folder +' renamed to: ' + destination.substr(sourceDirectory.length-2));
+										    	var ren = '/'+folders+'/'+ folder +' renamed to: ' + destination.substr(sourceDirectory.length-2)
+										    	res.write(ren + '\r\n')
+										    	console.log(ren);
+										    	var cnt = 1 + i;
+										    	// console.log(users.Contact.count() + ''+ cnt)
+										if(users.Contact.count() == cnt){
+											res.end("Done");
+										}
 
 										    }
 										});
-										// console.log("#######",fol);
-
+										
+										
 
 									}
 
+
 								});
+								
 								// return check;
 								
 							});
@@ -252,7 +304,9 @@ router.get('/rename', function(req, res){
 			
 
 		});
+	
 	});
+	// res.end('Done');
 
 });
 
@@ -277,7 +331,10 @@ router.get('/delempty', function(req, res){
 											    if(stats.size === 0){
 											    	rimraf(delPath, function(err){
 											    		if(err) console.log(err);
-											    		else console.log(delPath + " : DELETED");
+											    		else {
+											    			console.log(delPath + " : DELETED");
+											    			res.write(delPath + " : DELETED");
+											    		}
 
 											    	});
 											    	
@@ -315,7 +372,7 @@ router.get('/delempty', function(req, res){
 
 		});
 
-
+// res.end("Done");
 });
 
 router.get('/createfolder', function(req, res){
@@ -358,7 +415,6 @@ router.get('/createfolder', function(req, res){
 			if(name.indexOf('/') !== -1 || name.indexOf('\\') !== -1 ){
 			  name = name.replace('\\','-');
 			  name = name.replace('/','-');
-			  console.log(name);
 
 			}
 
@@ -367,6 +423,7 @@ router.get('/createfolder', function(req, res){
 			if(!fs.existsSync(source)){
 				fs.mkdirSync(source);
 				console.log('CREATED: ' + source);
+				res.write('CREATED: ' + source);
 			}
 
 			var sourceDirectory = '';
@@ -383,7 +440,14 @@ router.get('/createfolder', function(req, res){
 			if(!fs.existsSync(sourceDirectory)){
 				fs.mkdirSync(sourceDirectory);
 				console.log('CREATED: ' + sourceDirectory);
+				res.write('CREATED: ' + sourceDirectory+'\r\n');
+				
 			}
+			var cnt = 1 + i;
+			if(users.Contact.count() == cnt){
+				res.end("Done");
+			}
+										
 
 
 		});

@@ -15,30 +15,30 @@ var config = require('./config');
 
 var app = express();
 
-var mysql      = require('mysql');
-var connection = mysql.createConnection({
-  host     : config.host,
-  user     : config.user,
-  password : config.password
-});
+// var mysql      = require('mysql');
+// var connection = mysql.createConnection({
+//   host     : config.host,
+//   user     : config.user,
+//   password : config.password
+// });
 
-connection.connect(function(err) {
-  if (err) {
-    console.error('Error connecting to MySQL service: ' + err.stack);
-    return;
-  }
-});
+// connection.connect(function(err) {
+//   if (err) {
+//     console.error('Error connecting to MySQL service: ' + err.stack);
+//     return;
+//   }
+// });
 
-connection.query('CREATE DATABASE ' + config.database, function(err, rows) {
-  if(err){
-    console.log(err);
-  }else{
-    console.log('default database created');
-  }
+// connection.query('CREATE DATABASE ' + config.database, function(err, rows) {
+//   if(err){
+//     console.log(err);
+//   }else{
+//     console.log('default database created');
+//   }
   
-});
+// });
 
-connection.end();
+// connection.end();
 
 // persistenceStore.config(persistence, config.host, 3306, config.database, config.user, config.password);
 // var session = persistenceStore.getSession();
